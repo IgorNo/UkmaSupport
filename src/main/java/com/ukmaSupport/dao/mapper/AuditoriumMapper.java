@@ -14,6 +14,7 @@ public class AuditoriumMapper implements RowMapper<Auditorium> {
         auditorium.setId(resultSet.getInt("id"));
         auditorium.setUserId(resultSet.getInt("user_id"));
         auditorium.setNumber(resultSet.getString("number"));
+        auditorium.setAssistantName(resultSet.getString("assist"));
         return auditorium;
     }
 }

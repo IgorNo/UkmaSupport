@@ -1,11 +1,11 @@
 package com.ukmaSupport.controllers;
 
 import com.ukmaSupport.mailService.templates.RegistrationMail;
-import com.ukmaSupport.models.*;
+import com.ukmaSupport.models.User;
 import com.ukmaSupport.services.interfaces.UserService;
 import com.ukmaSupport.utils.Constants;
-import com.ukmaSupport.utils.RegistrationValidator;
 import com.ukmaSupport.utils.PasswordEncryptor;
+import com.ukmaSupport.utils.RegistrationValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Controller;
@@ -14,6 +14,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.ModelAndView;
 
 @Controller
 @RequestMapping(value = "/register")
@@ -42,10 +43,11 @@ public class Registration {
         if (result.hasErrors())
             return "registration/registration";
         user = PasswordEncryptor.encodeUser(user);
+        user.setEmail(user.getEmail().toLowerCase());
         userService.saveOrUpdate(user);
         String email = user.getEmail();
         user = userService.getByEmail(email);
-        registrationMail.send(email, Constants.LOCAL_SERVER + Constants.VERIFICATION + user.getId());
+        registrationMail.send(email, user.getId());
         return "registration/registrationSuccess";
     }
 }

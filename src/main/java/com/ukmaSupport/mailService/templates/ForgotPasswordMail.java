@@ -7,14 +7,14 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ForgotPasswordMail {
-    private static final String FROM_ADDR = Constants.MAIL_SERVER;  //mail server
 
     @Autowired
     private MailService mailService;
 
-    public void send(String toAddr, String link){
-        String subject = "You can change your password now";
+    public void send(String toAddr, int userId){
+        String subject = "Password change ready";
+        String link = Constants.SERVER + Constants.CHANGE_PASSWORD + userId;
         String body = "You can change your password: " + link + "\n\nUKMA Support\n" + Constants.SERVER;
-        mailService.sendEmail(toAddr, FROM_ADDR, subject, body);
+        mailService.sendEmail(toAddr, subject, body);
     }
 }

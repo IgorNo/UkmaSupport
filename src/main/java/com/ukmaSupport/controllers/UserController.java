@@ -1,5 +1,6 @@
 package com.ukmaSupport.controllers;
 
+import com.ukmaSupport.mailService.templates.NewOrderMail;
 import com.ukmaSupport.models.*;
 import com.ukmaSupport.services.interfaces.AuditoriumService;
 import com.ukmaSupport.services.interfaces.OrderService;
@@ -22,16 +23,21 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.servlet.http.HttpSession;
 import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 @Controller
 public class UserController {
 
     private final static String DONE = "done";
-    private final static String UNDONE = "Undone";
+    private final static String UNDONE = "not done";
 
     @Autowired
     private OrderService orderService;
+
+    @Autowired
+    private NewOrderMail newOrderMail;
 
     @Autowired
     private AuditoriumService auditoriumService;
@@ -50,8 +56,7 @@ public class UserController {
     @Qualifier("orderValidator")
     private OrderValidator validator;
 
-
-    @RequestMapping(value = "/ajaxtest", method = RequestMethod.GET)
+    @RequestMapping(value = "/user/ajaxtest", method = RequestMethod.GET)
     public
     @ResponseBody
     List<Workplace> getCharNum(@RequestParam("text") String text) {
@@ -59,7 +64,16 @@ public class UserController {
         return workplaces;
     }
 
-    @RequestMapping(value = "/createOrder", method = RequestMethod.GET)
+    @RequestMapping(value = "/user/userhome", method = RequestMethod.GET)
+    public String listUserOrders(ModelMap model) {
+        HttpSession session = getCurrentSession();
+        session.setAttribute("orderEdit",null);
+        User currentUser = userService.getById((Integer) session.getAttribute("id"));
+        model.addAttribute("currentUser", currentUser);
+        return "userPage/userHomePage";
+    }
+
+    @RequestMapping(value = "/user/createOrder", method = RequestMethod.GET)
     public String createOrder(ModelMap model) {
         Order order = new Order();
         List<Auditorium> auditoriums = auditoriumService.getAll();
@@ -68,70 +82,106 @@ public class UserController {
         return "userPage/createOrderPage";
     }
 
-    @RequestMapping(value = "/createOrder", method = RequestMethod.POST)
-    public String createOrderPost(@ModelAttribute("newOrder") Order order, @RequestParam("workplace_access_num") int workplaceNum, ModelMap model, BindingResult result) {
-        ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
-        HttpSession session = attr.getRequest().getSession();
-        //order.setWorkspaceNumber(workplaceNum);
-        order.setUserId((Integer) session.getAttribute("id"));
+    @RequestMapping(value = "/user/createOrder", method = RequestMethod.POST)
+    public String createOrderPost(@ModelAttribute("newOrder") Order order, ModelMap model, BindingResult result) {
+        int userId = (Integer) getCurrentSession().getAttribute("id");
+        validator.validate(order, result);
+        if (result.hasErrors()) {
+            List<Auditorium> auditoriums = auditoriumService.getAll();
+            model.addAttribute("auditoriums", auditoriums);
+            model.addAttribute("newOrder", order);
+            return "userPage/createOrderPage";
+        }
+
+        order.setUserId(userId);
         order.setStatus(UNDONE);
-        order.setCreatedAt(new Timestamp(new java.util.Date().getTime()));
-        order.setAssistantId(order.getUserId());
-        //validator.validate(order,result);
 
+        Timestamp timestamp = new Timestamp(new Date().getTime());
+
+        order.setCreatedAt(timestamp);
+
+        User assistant = userService.getResponsibleAssistant(order.getAuditorium());
+        int assistantId = 0;
+        if (assistant != null) assistantId = assistant.getId();
+        order.setAssistantId(assistantId);
         order.setWorkplace_id(workplaceService.getByNumber(Integer.parseInt(order.getWorkplace_access_num())).getId());
+
         orderService.createOrUpdate(order);
-        return "redirect:/userhome";
+
+        String date = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(timestamp);
+        System.out.println(date+"");
+        Order newOrder = orderService.getByTime(date);
+
+        if (assistant != null)
+            newOrderMail.send(assistant.getEmail(), newOrder.getId());
+
+        return "redirect:/user/userhome";
     }
 
-    @RequestMapping(value = "/userhome", method = RequestMethod.GET)
-    public String listUsersOrder(ModelMap model) {
-        ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
-        HttpSession session = attr.getRequest().getSession();
-        int userid = (Integer) session.getAttribute("id");
-
-        System.out.println(userid);
-        List<Order> orders = orderService.getByUserId(userid);
-        model.addAttribute("userOrder", orders);
-        return "userPage/userHomePage";
-    }
-
-    @RequestMapping(value = "/unComplited", method = RequestMethod.GET)
-    public @ResponseBody List<Order> uncompletedOrder() {
-        ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
-        HttpSession session = attr.getRequest().getSession();
-        int userId = (Integer) session.getAttribute("id");
-
-        System.out.println(userId);
-        List<Order> orders = orderService.getByUserIdStatus(userId, UNDONE);
-        return orders;
-    }
-
-    @RequestMapping(value = "/allUserOrders", method = RequestMethod.GET)
-    public @ResponseBody List<Order> getOrders() {
-
-        ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
-        HttpSession session = attr.getRequest().getSession();
-
-        int userId = (Integer) session.getAttribute("id");
+    @RequestMapping(value = "/user/allUserOrders", method = RequestMethod.GET)
+    public @ResponseBody List<Order> allUserOrders() {
+        int userId = (Integer) getCurrentSession().getAttribute("id");
         System.out.println(userId);
         List<Order> orders = orderService.getByUserId(userId);
         return orders;
     }
 
-    @RequestMapping(value = "/allComplited", method = RequestMethod.GET)
-    public @ResponseBody List<Order> getCompleted() {
-
-        ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
-        HttpSession session = attr.getRequest().getSession();
-
-        int userId = (Integer) session.getAttribute("id");
-        System.out.println(userId);
-        List<Order> orders = orderService.getByUserIdStatus(userId, DONE);
-        return orders;
+    @RequestMapping(value = "/user/delete/{id}", method = RequestMethod.GET)
+    public String deleteOrderById(Model model, @PathVariable("id") int id) {
+        orderService.delete(id);
+        return "redirect:/user/userhome";
     }
 
-    @RequestMapping(value = "/editProfile", method = RequestMethod.GET)
+    private HttpSession getCurrentSession(){
+        ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
+        return attr.getRequest().getSession();
+    }
+
+    @RequestMapping(value = "/user/editOrder/{id}", method = RequestMethod.GET)
+    public String editOrder(@PathVariable("id") Integer id, Model model) {
+
+        int userId = (Integer) getCurrentSession().getAttribute("id");
+
+
+        Order order = orderService.getByUserIdAndId(userId, id);
+        if (order == null) {
+            return "redirect:/user/userhome";
+        }
+        model.addAttribute("title", order.getTitle());
+        model.addAttribute("workplace", order.getWorkplace());
+        model.addAttribute("auditorium",order.getAuditorium());
+        model.addAttribute("content", order.getContent());
+        model.addAttribute("id", order.getId());
+        model.addAttribute("editOrder", order);
+
+        return "userPage/editOrder";
+    }
+
+    @RequestMapping(value = "/user/editOrder/save", method = RequestMethod.POST)
+    public String orderEdited(@ModelAttribute("id") Integer id, @ModelAttribute("editOrder") Order order, ModelMap model, BindingResult result) {
+        validator.validate(order, result);
+
+        if (result.hasErrors()) {
+            model.addAttribute("title", order.getTitle());
+            model.addAttribute("workplace", order.getWorkplace());
+            model.addAttribute("auditorium", order.getAuditorium());
+            model.addAttribute("content", order.getContent());
+            model.addAttribute("id", order.getId());
+            model.addAttribute("editOrder", order);
+            return "userPage/editOrder";
+        }
+        order.setId(id);
+        order.setCreatedAt(new Timestamp(new java.util.Date().getTime()));
+        orderService.update(order);
+        Integer orderId = (Integer) getCurrentSession().getAttribute("orderEdit");
+        if(orderId != null){
+            return "redirect:/addComment/"+orderId;
+        }
+
+        return "redirect:/user/userhome";
+    }
+
+    @RequestMapping(value = "/user/editProfile", method = RequestMethod.GET)
     public String editProfile(Model model) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
@@ -145,7 +195,7 @@ public class UserController {
     }
 
 
-    @RequestMapping(value = "/editProfile", method = RequestMethod.POST)
+    @RequestMapping(value = "/user/editProfile", method = RequestMethod.POST)
     public String profileEdited(@ModelAttribute("passChangeForm") EditForm editForm, BindingResult result) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
@@ -156,6 +206,6 @@ public class UserController {
         String pass = PasswordEncryptor.encode(editForm.getPassword());
         user.setPassword(pass);
         userService.saveOrUpdate(user);
-        return "userPage/passwordChangeSuccess";
+        return "redirect:/user/userhome";
     }
 }

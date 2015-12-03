@@ -19,13 +19,31 @@ public class UserServiceImpl implements UserService {
     @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
     @Override
     public User getById(int id) {
-        return userDao.getById(id);
+        User user;
+        try {
+            user = userDao.getById(id);
+        } catch (Exception e) {
+            user = null;
+        }
+        return user;
     }
 
     @Transactional(propagation = Propagation.REQUIRED, readOnly = false, rollbackFor = Exception.class)
     @Override
     public void delete(int id) {
         userDao.delete(id);
+    }
+
+    @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
+    @Override
+    public User getResponsibleAssistant(String auditorium) {
+        User user;
+        try {
+            user = userDao.getResponsibleAssistant(auditorium);
+        } catch (Exception e) {
+            user = null;
+        }
+        return user;
     }
 
     @Transactional(propagation = Propagation.REQUIRED, readOnly = false, rollbackFor = Exception.class)
@@ -47,7 +65,13 @@ public class UserServiceImpl implements UserService {
     @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
     @Override
     public User getByEmail(String email) {
-        return userDao.getByEmail(email);
+        User user;
+        try {
+            user = userDao.getByEmail(email);
+        } catch (Exception e) {
+            user = null;
+        }
+        return user;
     }
 
     @Override

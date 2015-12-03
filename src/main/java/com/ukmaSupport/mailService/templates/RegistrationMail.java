@@ -8,16 +8,16 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class RegistrationMail {
-    private static final String FROM_ADDR = Constants.MAIL_SERVER;  //mail server
 
     @Autowired
     private MailService mailService;
 
-    public void send(String toAddr, String link){
+    public void send(String toAddr, int userId) {
         String subject = "Welcome to UKMA Support";
-        String body = "Welcome to UKMA Support." + "\n\n" + "Please verify your email " + link +
+        String link = Constants.SERVER + Constants.VERIFICATION + userId;
+        String body = "Thank you for registering." + "\n\n" + "Please verify your email by clicking the link below " + link +
                 "\n\nUKMA Support\n" + Constants.SERVER;
 
-        mailService.sendEmail(toAddr, FROM_ADDR, subject, body);
+        mailService.sendEmail(toAddr, subject, body);
     }
 }
